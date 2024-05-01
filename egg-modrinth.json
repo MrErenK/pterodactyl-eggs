@@ -1,0 +1,58 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY Jexactyl PANEL - jexactyl.com",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2024-05-01T18:01:06+03:00",
+    "name": "Modrinth",
+    "author": "akbaseren4751@gmail.com",
+    "description": "Pterodactyl egg to start a Minecraft server with Modrinth modpacks.",
+    "features": null,
+    "docker_images": {
+        "Java 21": "ghcr.io\/pterodactyl\/yolks:java_21",
+        "Java 19": "ghcr.io\/pterodactyl\/yolks:java_19",
+        "Java 18": "ghcr.io\/pterodactyl\/yolks:java_18",
+        "Java 17": "ghcr.io\/pterodactyl\/yolks:java_17",
+        "Java 16": "ghcr.io\/pterodactyl\/yolks:java_16",
+        "Java 11": "ghcr.io\/pterodactyl\/yolks:java_11",
+        "Java 8": "ghcr.io\/pterodactyl\/yolks:java_8"
+    },
+    "file_denylist": [],
+    "startup": "if [ ! \"$(ls server.jar)\" ]; then .\/mrpack-install \"$(echo \"{{MODPACK_URL}}\" | awk -F'\/' '{print tolower($NF)}')\" --server-dir . --server-file server.jar; fi; java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}}",
+    "config": {
+        "files": "{\r\n    \"server.properties\": {\r\n        \"parser\": \"properties\",\r\n        \"find\": {\r\n            \"server-ip\": \"0.0.0.0\",\r\n            \"enable-query\": \"true\",\r\n            \"server-port\": \"{{server.build.default.port}}\"\r\n        }\r\n    }\r\n}",
+        "startup": "{\r\n    \"done\": \")! For help, type \",\r\n    \"userInteraction\": [\r\n        \"Go to eula.txt for more info.\"\r\n    ]\r\n}",
+        "logs": "{\r\n    \"custom\": false,\r\n    \"location\": \"logs\/latest.log\"\r\n}",
+        "stop": "stop"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!\/bin\/bash\r\n# Modrinth Installation Script\r\n#\r\n# Server Files: \/mnt\/server\r\n\r\n# Create directory for server files\r\nmkdir -p \/mnt\/server\r\ncd \/mnt\/server || { echo \"Failed to change directory.\"; exit 1; }\r\n\r\n# Update and install dependencies\r\napt update || { echo \"Failed to update packages.\"; exit 1; }\r\napt install -y curl jq unzip wget || { echo \"Failed to install dependencies.\"; exit 1; }\r\n\r\n# Fetch the JSON response from mrpack-install repo\r\njson_response=$(curl -s https:\/\/api.github.com\/repos\/nothub\/mrpack-install\/releases\/latest) || { echo \"Failed to fetch JSON response.\"; exit 1; }\r\n\r\n# Define the filename\r\nfilename=\"mrpack-install\"\r\n\r\n# Define os arch\r\nos_arch=\"$(uname -m)\"\r\n\r\n# Extract download URL based on architecture\r\nif [ \"${os_arch}\" == \"aarch64\" ]; then\r\n    echo \"Downloading aarch64 binary...\"\r\n    download_url=$(jq -r '.assets[] | select(.name == \"mrpack-install-linux-arm64\") | .browser_download_url' <<< \"$json_response\")\r\nelse\r\n    echo \"Downloading x86_64 binary...\"\r\n    download_url=$(jq -r '.assets[] | select(.name == \"mrpack-install-linux\") | .browser_download_url' <<< \"$json_response\")\r\nfi\r\n\r\n# Download mrpack-install based on architecture\r\nwget \"$download_url\" -O \"$filename\" || { echo \"Download failed\"; exit 1; }\r\nchmod +x \"$filename\" || { echo \"Failed to set execute permission.\"; exit 1; }\r\n\r\n# Verify if the downloaded file exists\r\nif [ ! -f \"$filename\" ]; then\r\n    echo \"Downloaded file not found.\"\r\n    exit 1\r\nfi\r\n\r\n# Create start.sh that includes the startup commands\r\ncat << 'EOF' > start.sh\r\n#!\/bin\/bash\r\n\r\n# Check if required variables are provided\r\nif [ -z \"${MODPACK_URL}\" ] || [ -z \"${SERVER_MEMORY}\" ] || [ -z \"${SERVER_JARFILE}\" ]; then\r\n    echo \"Please provide MODPACK_URL, SERVER_MEMORY, and SERVER_JARFILE before running this script.\"\r\n    exit 1\r\nfi\r\n\r\n# Check if the modpack is already installed\r\nif [ ! -f server.jar ] && [ ! -d mods ]; then\r\n    MODPACK_NAME=\"$(echo \"${MODPACK_URL}\" | awk -F'\/' '{print tolower($NF)}')\"\r\n    .\/mrpack-install \"${MODPACK_NAME}\" --server-dir . --server-file server.jar || { echo \"Failed to install modpack.\"; exit 1; }\r\nelse\r\n    echo \"The modpack is already installed. So starting the server. If you want to install a different modpack then remove all the files except 'start.sh' and 'mrpack-install' and restart the server.\"\r\nfi\r\n\r\n# CURRENTLY BROKEN\r\n# Update the modpack before starting the server\r\n#if [ \"${MODPACK_BACKUP}\" = \"true\" ]; then\r\n#    .\/mrpack-install update --backup-dir modpack-backup\r\n#else\r\n#    .\/mrpack-install update\r\n#fi\r\n\r\n# Start the server\r\njava -Xms128M -Xmx\"${SERVER_MEMORY}\"M -jar \"${SERVER_JARFILE}\"\r\nEOF\r\nchmod +x start.sh\r\n\r\necho \"Installation complete.\"",
+            "container": "debian:bullseye-slim",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Server Jar File",
+            "description": "The name of the server jarfile to run the server with.",
+            "env_variable": "SERVER_JARFILE",
+            "default_value": "server.jar",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|regex:\/^([\\w\\d._-]+)(\\.jar)$\/",
+            "field_type": "text"
+        },
+        {
+            "name": "Modpack URL",
+            "description": "The URL of the server modpack from Modrinth.",
+            "env_variable": "MODPACK_URL",
+            "default_value": "https:\/\/modrinth.com\/modpack\/fabulously-optimized",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|url",
+            "field_type": "text"
+        }
+    ]
+}
